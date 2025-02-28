@@ -1,0 +1,11 @@
+[importlinter]
+root_packages =
+    mypackage
+
+[importlinter:contract:1]
+name = No direct imports from lower layers
+type = forbidden
+source_modules =
+    mypackage.high
+forbidden_modules =
+    mypackage.low

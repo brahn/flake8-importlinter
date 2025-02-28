@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flake8-importlinter"
+version = "0.1.0"
+description = "Flake8 plugin for import-linter integration"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "brahn", email = "brahn@users.noreply.github.com"}
+]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Framework :: Flake8",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+]
+dependencies = [
+    "flake8>=3.8.0",
+    "import-linter @ git+https://github.com/brahn/import-linter.git@224b326",
+    "tomli>=2.0.0;python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.entry-points."flake8.extension"]
+IMP = "flake8_importlinter:ImportLinterPlugin"
+
+[tool.flake8]
+max-line-length = 120
