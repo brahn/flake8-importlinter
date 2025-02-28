@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flake8-importlinter"
+version = "0.1.0"
+description = "Flake8 plugin for import-linter integration"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+classifiers = [
+    "Framework :: Flake8",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "flake8>=3.8.0",
+    "import-linter>=1.0.0",
+]
+
+[project.entry-points."flake8.extension"]
+IMP = "flake8_importlinter:ImportLinterPlugin"
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/flake8-importlinter"
+"Bug Tracker" = "https://github.com/yourusername/flake8-importlinter/issues"
