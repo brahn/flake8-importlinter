@@ -1,11 +1,16 @@
 import os
 import re
+import sys
 from typing import Generator, Tuple, Any, Dict, Optional, List
 
 try:
     from importlinter.application.use_cases import create_report, read_user_options
     from importlinter.application.user_options import UserOptions
     from importlinter.application.ports.reporting import Report
+    from importlinter.configuration import configure
+
+    # Initialize importlinter configuration
+    configure()
 
     IMPORT_LINTER_AVAILABLE = True
 except ImportError:
