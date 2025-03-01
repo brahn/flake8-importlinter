@@ -45,7 +45,7 @@ class MockReport:
     def __init__(self, contract_checks: Optional[List[Tuple[MockContract, MockContractCheck]]] = None):
         self._contract_checks = contract_checks or []
 
-    def get_contract_checks(self) -> List[Tuple[MockContract, MockContractCheck]]:
+    def get_contracts_and_checks(self) -> List[Tuple[MockContract, MockContractCheck]]:
         return self._contract_checks
 
     @property

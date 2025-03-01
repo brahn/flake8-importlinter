@@ -160,7 +160,7 @@ class ImportLinterPlugin:
         violations = []
 
         # Iterate through all contract checks in the report
-        for contract, check in report.get_contract_checks():
+        for contract, check in report.get_contracts_and_checks():
             if check.kept:
                 continue
 
