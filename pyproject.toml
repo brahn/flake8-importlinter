@@ -30,9 +30,17 @@ dependencies = [
     "import-linter>=1.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
 [project.entry-points."flake8.extension"]
 IMP = "flake8_importlinter:ImportLinterPlugin"
 
 [project.urls]
 "Homepage" = "https://github.com/yourusername/flake8-importlinter"
 "Bug Tracker" = "https://github.com/yourusername/flake8-importlinter/issues"
+
+[tool.flake8]
+max-line-length = 120
