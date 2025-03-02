@@ -107,9 +107,7 @@ class ImportLinterPlugin:
                 cache_dir=os.path.join(os.path.expanduser("~"), ".cache", "flake8-importlinter"),
             )
 
-            # Extract violations for this module from the report
-            for contract_name, violation in self._extract_violations(report, module_name):
-                yield from self._flake8_errors(contract_name, violation, module_name)
+            yield from self._flake8_errors_for_module(report, module_name)
 
         except Exception as e:
             error_str = str(e)
@@ -120,7 +118,23 @@ class ImportLinterPlugin:
             # Restore the original Python path
             sys.path = original_path
 
-    def _flake8_errors(
+    def _flake8_errors_for_module(self, report: Report, module_name: str) -> list[tuple[int, int, str, type]]:
+        """
+        Args:
+            report: The Report object from import-linter
+            module_name: The module name for the current file
+
+        Returns:
+            Tuples of (line_number, column, message, type) for each violation
+        """
+        errors = []
+        # Iterate through all contract checks in the report
+        for contract, check in report.get_contracts_and_checks():
+            for v in contract.violations(check):
+                errors.extend(self._flake8_errors_for_violation(contract.name, v, module_name))
+        return errors
+
+    def _flake8_errors_for_violation(
         self, contract_name: str, violation: Violation, module_name: str
     ) -> list[tuple[int, int, str, type]]:
         line_numbers = []
@@ -168,27 +182,3 @@ class ImportLinterPlugin:
             module_parts.append(os.path.splitext(basename)[0])
 
         return ".".join(module_parts)
-
-    def _extract_violations(self, report: Report, module_name: str) -> list[tuple[str, Violation]]:
-        """
-        Extract violations for the current module from the report.
-
-        Reference to import-linter structure:
-        - Report object contains ContractCheck objects
-        - Each ContractCheck has a `kept` attribute (boolean) which is False if the contract was violated
-        - Contract violations are stored in ContractCheck.metadata
-
-        Args:
-            report: The Report object from import-linter
-            module_name: The module name for the current file
-
-        Returns:
-            List of (contract_name, Violation) tuples
-        """
-        violations = []
-        # Iterate through all contract checks in the report
-        for contract, check in report.get_contracts_and_checks():
-            for v in contract.violations(check):
-                if any(note.module == module_name for note in v.import_notes):
-                    violations.append(v)
-        return violations
