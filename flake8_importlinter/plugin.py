@@ -13,6 +13,7 @@ try:
     from importlinter.application.use_cases import create_report, read_user_options
     from importlinter.application.ports.reporting import Report
     from importlinter.configuration import configure as importlinter_configure
+    from importlinter.domain.contract import Violation
 
     IMPORT_LINTER_AVAILABLE = True
 except ImportError:
@@ -78,20 +79,14 @@ class ImportLinterPlugin:
         Yields:
             Tuples of (line_number, column, message, type) for each violation
         """
+        # Don't proceed unless import-linter is available, configured, and we're
+        # checking a Python file
         if not IMPORT_LINTER_AVAILABLE:
-            # Skip processing if import-linter is not installed
             return
         if not self.filename.endswith(".py"):
-            # Only process Python files
             return
-        if ImportLinterPlugin._configuration_error:
-            # If there was a configuration error, report it and return
-            yield (
-                1,
-                0,
-                f"IMP000 Error configuring import-linter: {ImportLinterPlugin._configuration_error}",
-                type(self),
-            )
+        if err := ImportLinterPlugin._configuration_error:
+            yield self._make_flake8_error(1, "IMP000", f"Error configuring import-linter: {err}")
             return
 
         try:
@@ -99,40 +94,46 @@ class ImportLinterPlugin:
             if self.project_root_dir not in sys.path:
                 sys.path.insert(0, self.project_root_dir)
 
-            # Read the user options from the config file
+            # Get the module name corresponding to the file getting checked
+            module_name = self._get_module_name(self.filename)
+            if not module_name:
+                return
+
+            # Read the user options from the config file, create the report of contract checks
             user_options = read_user_options(config_filename=self.config_filepath)
             _register_contract_types(user_options)
-
-            # Create a report from the user options with caching
             report = create_report(
                 user_options,
                 cache_dir=os.path.join(os.path.expanduser("~"), ".cache", "flake8-importlinter"),
             )
 
-            # Get the module name corresponding to this file
-            module_name = self._get_module_name(self.project_root_dir)
-            if not module_name:
-                return
-
             # Extract violations for this module from the report
-            for contract_name, violations in self._extract_violations(report, module_name):
-                for line_num, message in violations:
-                    yield (
-                        line_num,
-                        0,  # Column number (always 0 for architectural violations)
-                        f"IMP001 {contract_name}: {message}",
-                        type(self),
-                    )
+            for contract_name, violation in self._extract_violations(report, module_name):
+                yield from self._flake8_errors(contract_name, violation, module_name)
 
         except Exception as e:
             error_str = str(e)
-            # Log the full stack trace
             logger.exception(f"Error running import-linter: {error_str}")
-            yield (1, 0, f"IMP000 Error running import-linter: {error_str}", type(self))  # Report on first line
+            yield self._make_flake8_error(1, "IMP000", f"Error running import-linter: {error_str}")
 
         finally:
             # Restore the original Python path
             sys.path = original_path
+
+    def _flake8_errors(
+        self, contract_name: str, violation: Violation, module_name: str
+    ) -> list[tuple[int, int, str, type]]:
+        line_numbers = []
+        for note in violation.import_notes:
+            if note.module == module_name:
+                line_numbers.extend(list(note.line_numbers))
+        return [
+            self._make_flake8_error(line_num, "IMP001", f"{contract_name}: {violation.summary}")
+            for line_num in line_numbers
+        ]
+
+    def _make_flake8_error(self, line_num, code, msg) -> tuple[int, int, str, type]:
+        return (line_num, 0, f"{code} {msg}", type(self))
 
     def _get_module_name(self, project_root: str) -> Optional[str]:
         """
@@ -168,7 +169,7 @@ class ImportLinterPlugin:
 
         return ".".join(module_parts)
 
-    def _extract_violations(self, report: Report, module_name: str) -> List[Tuple[str, List[Tuple[int, str]]]]:
+    def _extract_violations(self, report: Report, module_name: str) -> list[tuple[str, Violation]]:
         """
         Extract violations for the current module from the report.
 
@@ -182,116 +183,12 @@ class ImportLinterPlugin:
             module_name: The module name for the current file
 
         Returns:
-            List of (contract_name, violations) tuples, where violations is a
-            list of (line_number, message) tuples.
+            List of (contract_name, Violation) tuples
         """
         violations = []
         # Iterate through all contract checks in the report
         for contract, check in report.get_contracts_and_checks():
-            contract_violations = self._process_check(check, module_name)
-            if contract_violations:
-                violations.append((contract.name, contract_violations))
+            for v in contract.violations(check):
+                if any(note.module == module_name for note in v.import_notes):
+                    violations.append(v)
         return violations
-
-    def _process_check(self, check: ContractCheck, module_name: str) -> List[Tuple[int, str]]:
-        """
-        Process a contract check.  Return a list of (line_number, message) tuples for violations
-        involving this module.
-        """
-        if check.kept:
-            return []
-        violations = (check.metadata or {}).get("violations", [])
-        results = []
-        for violation in violations:
-            results.extend(self._process_violation(violation, module_name))
-        return results
-
-    def _process_violation(self, violation, module_name: str) -> List[Tuple[int, str]]:
-        """
-        Process a single violation and extract relevant information if it involves the current module.
-
-        Args:
-            violation: The violation object from import-linter
-            module_name: The module name for the current file
-
-        Returns:
-            List of (line_number, message) tuples for violations involving this module.
-            Empty list if no violations found for this module.
-        """
-        module_violations = []
-        violation_found = False
-
-        # For contracts with direct importer/imported attributes (like ForbiddenContract)
-        if hasattr(violation, "importer") and violation.importer == module_name:
-            line_num = self._get_line_number_from_violation(violation)
-            if line_num:
-                message = f"Forbidden import of {violation.imported}"
-                module_violations.append((line_num, message))
-                violation_found = True
-
-        # For layers contract - check if current module is importing from a higher layer
-        elif hasattr(violation, "higher_layer") and hasattr(violation, "lower_layer"):
-            # Check if the violation involves the current module as lower layer
-            if module_name.startswith(violation.lower_layer):
-                line_num = self._get_line_number_from_violation(violation)
-                if line_num:
-                    message = (
-                        f"Illegal import from lower layer {module_name} to " f"higher layer {violation.higher_layer}"
-                    )
-                    module_violations.append((line_num, message))
-                    violation_found = True
-            # Or as higher layer
-            elif module_name.startswith(violation.higher_layer):
-                line_num = self._get_line_number_from_violation(violation)
-                if line_num:
-                    message = (
-                        f"Illegal import from higher layer {module_name} to " f"lower layer {violation.lower_layer}"
-                    )
-                    module_violations.append((line_num, message))
-                    violation_found = True
-
-        # For more complex violations (need to extract from string representation)
-        if not violation_found:
-            violation_str = str(violation)
-            if violation_str.startswith(f"{module_name} ->") or f"-> {module_name}" in violation_str:
-                line_match = re.search(r"\(l\.(\d+)\)", violation_str)
-                if line_match:
-                    line_num = int(line_match.group(1))
-                    imported_match = re.search(r"-> ([\w\.]+)", violation_str)
-                    imported = imported_match.group(1) if imported_match else "unknown module"
-                    message = f"Forbidden import of {imported}"
-                    module_violations.append((line_num, message))
-
-        return module_violations
-
-    def _get_line_number_from_violation(self, violation) -> Optional[int]:
-        """
-        Extract the line number from a violation object.
-
-        This handles different ways that line numbers might be stored:
-        1. As a direct attribute (violation.line_number)
-        2. In a line_numbers tuple (violation.line_numbers[0])
-        3. In the string representation using a regex
-
-        Args:
-            violation: The violation object from import-linter
-
-        Returns:
-            The line number or None if it can't be determined
-        """
-        # Try direct line_number attribute
-        if hasattr(violation, "line_number") and violation.line_number is not None:
-            return violation.line_number
-
-        # Try line_numbers tuple attribute
-        if hasattr(violation, "line_numbers") and violation.line_numbers:
-            if violation.line_numbers[0] is not None:
-                return violation.line_numbers[0]
-
-        # Try extracting from string representation
-        line_match = re.search(r"\(l\.(\d+)\)", str(violation))
-        if line_match:
-            return int(line_match.group(1))
-
-        # Default to first line if we can't find a line number
-        return 1
