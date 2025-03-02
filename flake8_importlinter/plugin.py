@@ -1,12 +1,16 @@
 import os
 import re
 import sys
-from typing import Generator, Tuple, Optional, List
+from typing import Generator, Tuple, Optional, List, TYPE_CHECKING, Any, Union
 import logging
 
 from importlinter.application.use_cases import _register_contract_types
 from importlinter.domain.contract import ContractCheck
 
+# For type checking only
+if TYPE_CHECKING:
+    from importlinter.application.ports.reporting import Report
+    from importlinter.domain.contract import Violation
 
 # Initialize importlinter configuration
 try:
@@ -118,7 +122,7 @@ class ImportLinterPlugin:
             # Restore the original Python path
             sys.path = original_path
 
-    def _flake8_errors_for_module(self, report: Report, module_name: str) -> list[tuple[int, int, str, type]]:
+    def _flake8_errors_for_module(self, report: "Report", module_name: str) -> list[tuple[int, int, str, type]]:
         """
         Args:
             report: The Report object from import-linter
@@ -135,7 +139,7 @@ class ImportLinterPlugin:
         return errors
 
     def _flake8_errors_for_violation(
-        self, contract_name: str, violation: Violation, module_name: str
+        self, contract_name: str, violation: "Violation", module_name: str
     ) -> list[tuple[int, int, str, type]]:
         line_numbers = []
         for note in violation.import_notes:
