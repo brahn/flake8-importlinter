@@ -3,8 +3,8 @@ root_packages =
     mypackage
 
 [importlinter:contract:1]
-name=Layer boundaries
-type=layers
+name = Layer boundaries
+type = layers
 layers=
     mypackage.high
     mypackage.low

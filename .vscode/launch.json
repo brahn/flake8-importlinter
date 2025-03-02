@@ -10,7 +10,25 @@
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
-      "justMyCode": false
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+      },
+      "subProcess": true,
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "${workspaceFolder}"
+        },
+        {
+          "localRoot": "${workspaceFolder}/venv/lib/python3.*/site-packages/importlinter",
+          "remoteRoot": "${workspaceFolder}/venv/lib/python3.*/site-packages/importlinter"
+        },
+        {
+          "localRoot": "${workspaceFolder}/../import-linter",
+          "remoteRoot": "${workspaceFolder}/../import-linter"
+        }
+      ]
     },
     {
       "name": "Python: pytest",
@@ -19,6 +37,7 @@
       "program": "${workspaceFolder}/venv/bin/pytest",
       "console": "integratedTerminal",
       "justMyCode": false,
+      "subProcess": true,
       "env": {
         "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/venv/lib/python3.13/site-packages"
       },
@@ -30,6 +49,10 @@
         {
           "localRoot": "${workspaceFolder}/venv/lib/python3.13/site-packages/",
           "remoteRoot": "${workspaceFolder}/venv/lib/python3.13/site-packages/"
+        },
+        {
+          "localRoot": "${workspaceFolder}/../import-linter",
+          "remoteRoot": "${workspaceFolder}/../import-linter"
         }
       ]
     }

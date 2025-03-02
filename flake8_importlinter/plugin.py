@@ -4,6 +4,8 @@ import sys
 from typing import Generator, Tuple, Optional, List
 import logging
 
+from importlinter.application.use_cases import _register_contract_types
+
 
 # Initialize importlinter configuration
 try:
@@ -16,7 +18,7 @@ except ImportError:
     IMPORT_LINTER_AVAILABLE = False
 
 # Create a logger for our plugin
-logger = logging.getLogger("flake8.importlinter")
+logger = logging.getLogger("flake8-importlinter plugin")
 
 
 class ImportLinterPlugin:
@@ -98,6 +100,7 @@ class ImportLinterPlugin:
 
             # Read the user options from the config file
             user_options = read_user_options(config_filename=self.config_filepath)
+            _register_contract_types(user_options)
 
             # Create a report from the user options with caching
             report = create_report(
@@ -122,6 +125,8 @@ class ImportLinterPlugin:
 
         except Exception as e:
             error_str = str(e)
+            # Log the full stack trace
+            logger.exception(f"Error running import-linter: {error_str}")
             yield (1, 0, f"IMP000 Error running import-linter: {error_str}", type(self))  # Report on first line
 
         finally:
