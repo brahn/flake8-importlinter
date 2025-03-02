@@ -1,5 +1,6 @@
 [importlinter]
-root_packages=mypackage
+root_packages =
+    mypackage
 
 [importlinter:contract:1]
 name=Layer boundaries
