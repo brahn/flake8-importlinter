@@ -28,8 +28,7 @@ classifiers = [
 ]
 dependencies = [
     "flake8>=3.8.0",
-    # FIXME: depend on git repo
-    "import-linter @ file:///Users/brahn/personal/il-development/import-linter",
+    "import-linter @ git+https://github.com/brahn/import-linter.git@224b326",
     "tomli>=2.0.0;python_version<'3.11'",
 ]
 

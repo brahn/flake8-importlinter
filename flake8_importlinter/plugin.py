@@ -43,30 +43,24 @@ class ImportLinterPlugin:
     _configured = False
     _configuration_error = None
 
-    def __init__(self, tree, filename, project_root_dir, config_filepath=None):
+    def __init__(self, filename):
         """
-        Initialize the plugin with the current file information.
+        Initialize the plugin with the path to the file being checked
 
-        Args:
-            _tree: AST tree of the file (required by Flake8 plugin interface, though we don't use it)
-            filename: Path to the file being checked
-            project_root_dir: Path to the project root directory. This will be added to the Python path
-                             to ensure import-linter can resolve module names correctly.
-            config_filepath: Path to the import-linter config file. If None,
-                             import-linter will search for a config file.
-
-        Note: Other import-linter options (limit_to_contracts, cache_dir,
-              is_debug_mode, show_timings, verbose) are not yet implemented.
+        # TODO (maybe): enable the user to configure:
+        # * project_root_dir: Path to the project root directory.
+        # * config_filepath: Path to the import-linter config file. For now, rely on
+        #     import-linter to find the config file.
+        # * other import-linter options (limit_to_contracts, cache_dir, is_debug_mode,
+        #   show_timings, verbose)
         """
         self.filename = filename
-        self.project_root_dir = project_root_dir
-        self.config_filepath = config_filepath
         if not IMPORT_LINTER_AVAILABLE:
             logger.warning("import-linter is not available")
             return
-        self.setup_importlinter()
+        self._setup_config()
 
-    def setup_importlinter(self):
+    def _setup_config(self):
         # Configure import-linter once per process
         if not ImportLinterPlugin._configured:
             try:
@@ -95,8 +89,9 @@ class ImportLinterPlugin:
 
         try:
             original_path = list(sys.path)
-            if self.project_root_dir not in sys.path:
-                sys.path.insert(0, self.project_root_dir)
+            # FIXME (maybe): need to make project_root configurable
+            # if self.project_root_dir not in sys.path:
+            #     sys.path.insert(0, self.project_root_dir)
 
             # Get the module name corresponding to the file getting checked
             module_name = self._get_module_name(self.filename)
@@ -104,7 +99,8 @@ class ImportLinterPlugin:
                 return
 
             # Read the user options from the config file, create the report of contract checks
-            user_options = read_user_options(config_filename=self.config_filepath)
+            # FIXME (maybe): need to make config_filename configurable
+            user_options = read_user_options(config_filename=None)
             _register_contract_types(user_options)
             report = create_report(
                 user_options,
@@ -153,7 +149,8 @@ class ImportLinterPlugin:
     def _make_flake8_error(self, line_num, code, msg) -> tuple[int, int, str, type]:
         return (line_num, 0, f"{code} {msg}", type(self))
 
-    def _get_module_name(self, project_root: str) -> Optional[str]:
+    @staticmethod
+    def _get_module_name(filename: str) -> Optional[str]:
         """
         Convert the current filename to a Python module name.
 
@@ -163,11 +160,13 @@ class ImportLinterPlugin:
         Returns:
             The Python module name for the current file, or None if not determinable
         """
-        if not self.filename.endswith(".py"):
+        if not filename.endswith(".py"):
             return None
 
         # Find the relative path from the project root to this file
-        rel_path = os.path.relpath(self.filename, project_root)
+        # FIXME (maybe): need to make project_root configurable
+        # rel_path = os.path.relpath(self.filename, project_root)
+        rel_path = filename
 
         # If the file is not under the project root, it's not part of the project
         if rel_path.startswith(".."):
@@ -181,7 +180,7 @@ class ImportLinterPlugin:
                 module_parts.append(part)
 
         # Add the file name without .py extension
-        basename = os.path.basename(self.filename)
+        basename = os.path.basename(filename)
         if basename != "__init__.py":
             module_parts.append(os.path.splitext(basename)[0])
 
