@@ -39,7 +39,12 @@ class TestIntegration:
         """Test the plugin with a forbidden contract."""
         # Create a plugin instance with a file that violates the contract
         module_path = os.path.join(self.integration_dir, "mypackage", "high", "module_a.py")
-        plugin = ImportLinterPlugin(tree=None, filename=module_path)
+        plugin = ImportLinterPlugin(
+            tree=None,
+            filename=module_path,
+            project_root_dir=self.integration_dir,
+            config_filepath=os.path.join(self.integration_dir, ".importlinter.forbidden_contract"),
+        )
 
         # Run the plugin and collect any errors
         errors = list(plugin.run())
@@ -65,8 +70,8 @@ class TestIntegration:
         original_path = list(sys.path)
 
         # Define file paths
-        import_linter_path = os.path.join(self.integration_dir, ".importlinter")
-        layers_import_linter_path = os.path.join(self.integration_dir, ".importlinter.layers")
+        import_linter_path = os.path.join(self.integration_dir, ".importlinter.forbidden_contract")
+        layers_import_linter_path = os.path.join(self.integration_dir, ".importlinter.layers_contract")
         backup_path = os.path.join(self.integration_dir, ".importlinter.backup")
 
         try:
@@ -81,7 +86,12 @@ class TestIntegration:
 
             # Create a plugin instance with a file that violates the layers contract
             module_path = os.path.join(self.integration_dir, "mypackage", "low", "module_c.py")
-            plugin = ImportLinterPlugin(tree=None, filename=module_path)
+            plugin = ImportLinterPlugin(
+                tree=None,
+                filename=module_path,
+                config_filepath=os.path.join(self.integration_dir, ".importlinter.layers_contract"),
+                project_root_dir=self.integration_dir,
+            )
 
             # Run the plugin and collect any errors
             errors = list(plugin.run())
