@@ -192,51 +192,74 @@ class ImportLinterPlugin:
         for contract, check in report.get_contracts_and_checks():
             if check.kept:
                 continue
-
             # Find violations specific to this module
-            module_violations = []
-
-            all_violations = check.metadata.get("violations", [])
-
-            for violation in all_violations:
-                violation_found = False
-
-                # For contracts with direct importer/imported attributes (like ForbiddenContract)
-                if hasattr(violation, "importer") and violation.importer == module_name:
-                    line_num = self._get_line_number_from_violation(violation)
-                    if line_num:
-                        message = f"Forbidden import of {violation.imported}"
-                        module_violations.append((line_num, message))
-                        violation_found = True
-
-                # For layers contract
-                elif hasattr(violation, "higher_layer") and hasattr(violation, "lower_layer"):
-                    # Check if the violation involves the current module
-                    if module_name.startswith(violation.higher_layer):
-                        higher_module = module_name
-                        line_num = self._get_line_number_from_violation(violation)
-                        if line_num:
-                            message = (
-                                f"Illegal import from higher layer {higher_module} to "
-                                f"lower layer {violation.lower_layer}"
-                            )
-                            module_violations.append((line_num, message))
-                            violation_found = True
-
-                # For more complex violations (need to extract from string representation)
-                if not violation_found and str(violation).startswith(f"{module_name} ->"):
-                    line_match = re.search(r"\(l\.(\d+)\)", str(violation))
-                    if line_match:
-                        line_num = int(line_match.group(1))
-                        imported_match = re.search(r"-> ([\w\.]+)", str(violation))
-                        imported = imported_match.group(1) if imported_match else "unknown module"
-                        message = f"Forbidden import of {imported}"
-                        module_violations.append((line_num, message))
-
-            if module_violations:
-                violations.append((contract.name, module_violations))
+            contract_violations = []
+            violations_for_check = (check.metadata or {}).get("violations", [])
+            for violation in violations_for_check:
+                violation_results = self._process_violation(violation, module_name)
+                contract_violations.extend(violation_results)
+            if contract_violations:
+                violations.append((contract.name, contract_violations))
 
         return violations
+
+    def _process_violation(self, violation, module_name: str) -> List[Tuple[int, str]]:
+        """
+        Process a single violation and extract relevant information if it involves the current module.
+
+        Args:
+            violation: The violation object from import-linter
+            module_name: The module name for the current file
+
+        Returns:
+            List of (line_number, message) tuples for violations involving this module.
+            Empty list if no violations found for this module.
+        """
+        module_violations = []
+        violation_found = False
+
+        # For contracts with direct importer/imported attributes (like ForbiddenContract)
+        if hasattr(violation, "importer") and violation.importer == module_name:
+            line_num = self._get_line_number_from_violation(violation)
+            if line_num:
+                message = f"Forbidden import of {violation.imported}"
+                module_violations.append((line_num, message))
+                violation_found = True
+
+        # For layers contract - check if current module is importing from a higher layer
+        elif hasattr(violation, "higher_layer") and hasattr(violation, "lower_layer"):
+            # Check if the violation involves the current module as lower layer
+            if module_name.startswith(violation.lower_layer):
+                line_num = self._get_line_number_from_violation(violation)
+                if line_num:
+                    message = (
+                        f"Illegal import from lower layer {module_name} to " f"higher layer {violation.higher_layer}"
+                    )
+                    module_violations.append((line_num, message))
+                    violation_found = True
+            # Or as higher layer
+            elif module_name.startswith(violation.higher_layer):
+                line_num = self._get_line_number_from_violation(violation)
+                if line_num:
+                    message = (
+                        f"Illegal import from higher layer {module_name} to " f"lower layer {violation.lower_layer}"
+                    )
+                    module_violations.append((line_num, message))
+                    violation_found = True
+
+        # For more complex violations (need to extract from string representation)
+        if not violation_found:
+            violation_str = str(violation)
+            if violation_str.startswith(f"{module_name} ->") or f"-> {module_name}" in violation_str:
+                line_match = re.search(r"\(l\.(\d+)\)", violation_str)
+                if line_match:
+                    line_num = int(line_match.group(1))
+                    imported_match = re.search(r"-> ([\w\.]+)", violation_str)
+                    imported = imported_match.group(1) if imported_match else "unknown module"
+                    message = f"Forbidden import of {imported}"
+                    module_violations.append((line_num, message))
+
+        return module_violations
 
     def _get_line_number_from_violation(self, violation) -> Optional[int]:
         """
