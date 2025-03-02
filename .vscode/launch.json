@@ -1,0 +1,60 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${env:PYTHONPATH}"
+      },
+      "subProcess": true,
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "${workspaceFolder}"
+        },
+        {
+          "localRoot": "${workspaceFolder}/venv/lib/python3.*/site-packages/importlinter",
+          "remoteRoot": "${workspaceFolder}/venv/lib/python3.*/site-packages/importlinter"
+        },
+        {
+          "localRoot": "${workspaceFolder}/../import-linter",
+          "remoteRoot": "${workspaceFolder}/../import-linter"
+        }
+      ]
+    },
+    {
+      "name": "Python: pytest",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/venv/bin/pytest",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "subProcess": true,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/venv/lib/python3.13/site-packages"
+      },
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "${workspaceFolder}"
+        },
+        {
+          "localRoot": "${workspaceFolder}/venv/lib/python3.13/site-packages/",
+          "remoteRoot": "${workspaceFolder}/venv/lib/python3.13/site-packages/"
+        },
+        {
+          "localRoot": "${workspaceFolder}/../import-linter",
+          "remoteRoot": "${workspaceFolder}/../import-linter"
+        }
+      ]
+    }
+  ]
+}

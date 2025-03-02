@@ -1,8 +1,0 @@
-[importlinter]
-root_packages = mypackage
-
-[importlinter:contract:1]
-name = No direct imports from lower layers
-type = forbidden
-importer = mypackage.high
-imported = mypackage.low

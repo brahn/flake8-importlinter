@@ -23,52 +23,10 @@ pytest
 
 This plugin interacts with import-linter using the following API points:
 
-1. `use_cases.create_report()` - Returns a Report object containing contract checks
-2. Report Object Structure:
-   ```python
-   # Reference to relevant Report class structure
-   class Report:
-       def __init__(self, graph, show_timings=False, graph_building_duration=None):
-           self._check_map = {}
-           self.graph = graph
-           self.show_timings = show_timings
-           self.graph_building_duration = graph_building_duration
+1. `use_cases.create_report()` - Returns an import-linter Report object
 
-       def get_contract_checks(self):
-           # Returns tuples of (Contract, ContractCheck)
-           return [(contract, check) for contract, check in self._check_map.items()]
+2. (In progress) import-linter's rendering module is used to print the report to the console.  We'll use similar logic to extract violations from the report, and then tranform them into flake8-style errors.
 
-       def add_contract_check(self, contract, check, duration=None):
-           # Adds a contract check to the report
-           self._check_map[contract] = check
-
-       @property
-       def contains_failures(self):
-           # Returns True if any contracts are broken
-           return any(not check.kept for check in self._check_map.values())
-   ```
-
-3. Contract Check Structure:
-   ```python
-   # Reference to ContractCheck structure
-   class ContractCheck:
-       def __init__(self, kept, violations=None, warnings=None):
-           self.kept = kept
-           self.violations = violations or []
-           self.warnings = warnings or []
-   ```
-
-4. Violation Structure:
-   Violations can have different structures depending on the contract type:
-   ```python
-   # Example for ForbiddenContract
-   class ForbiddenImportViolation:
-       def __init__(self, importer, imported, line_number, line_contents):
-           self.importer = importer  # The importing module
-           self.imported = imported  # The imported module
-           self.line_number = line_number  # The line where the import occurs
-           self.line_contents = line_contents  # The actual import statement
-   ```
 
 ## Key Components
 

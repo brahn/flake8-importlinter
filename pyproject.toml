@@ -1,3 +1,4 @@
+# TODO: Look over this file and make sure it's correct
 [build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -27,7 +28,14 @@ classifiers = [
 ]
 dependencies = [
     "flake8>=3.8.0",
-    "import-linter>=1.0.0",
+#    "import-linter==2.2",
+    "tomli>=2.0.0;python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "import-linter @ file:///Users/brahn/personal/il-development/import-linter",
 ]
 
 [project.entry-points."flake8.extension"]
@@ -36,3 +44,6 @@ IMP = "flake8_importlinter:ImportLinterPlugin"
 [project.urls]
 "Homepage" = "https://github.com/yourusername/flake8-importlinter"
 "Bug Tracker" = "https://github.com/yourusername/flake8-importlinter/issues"
+
+[tool.flake8]
+max-line-length = 120

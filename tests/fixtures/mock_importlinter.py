@@ -30,6 +30,11 @@ class MockContractCheck:
         self.violations = violations or []
         self.warnings = warnings or []
 
+    @property
+    def metadata(self) -> dict:
+        """Return a dictionary with violations, matching the structure expected by the plugin."""
+        return {"violations": self.violations}
+
 
 class MockContract:
     """Mock contract object that mimics import-linter's Contract."""
@@ -45,7 +50,7 @@ class MockReport:
     def __init__(self, contract_checks: Optional[List[Tuple[MockContract, MockContractCheck]]] = None):
         self._contract_checks = contract_checks or []
 
-    def get_contract_checks(self) -> List[Tuple[MockContract, MockContractCheck]]:
+    def get_contracts_and_checks(self) -> List[Tuple[MockContract, MockContractCheck]]:
         return self._contract_checks
 
     @property

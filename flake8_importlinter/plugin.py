@@ -1,15 +1,26 @@
 import os
 import re
-from typing import Generator, Tuple, Any, Dict, Optional, List
+import sys
+from typing import Generator, Tuple, Optional, List
+import logging
 
+from importlinter.application.use_cases import _register_contract_types
+from importlinter.domain.contract import ContractCheck
+
+
+# Initialize importlinter configuration
 try:
     from importlinter.application.use_cases import create_report, read_user_options
-    from importlinter.application.user_options import UserOptions
     from importlinter.application.ports.reporting import Report
+    from importlinter.configuration import configure as importlinter_configure
+    from importlinter.domain.contract import Violation
 
     IMPORT_LINTER_AVAILABLE = True
 except ImportError:
     IMPORT_LINTER_AVAILABLE = False
+
+# Create a logger for our plugin
+logger = logging.getLogger("flake8-importlinter plugin")
 
 
 class ImportLinterPlugin:
@@ -24,11 +35,42 @@ class ImportLinterPlugin:
     name = "flake8-importlinter"
     version = __import__("flake8_importlinter").__version__
 
-    def __init__(self, tree, filename):
-        """Initialize the plugin with the current file information."""
+    # Class-level variable to track if we've tried to configure import-linter
+    _configured = False
+    _configuration_error = None
+
+    def __init__(self, tree, filename, project_root_dir, config_filepath=None):
+        """
+        Initialize the plugin with the current file information.
+
+        Args:
+            _tree: AST tree of the file (required by Flake8 plugin interface, though we don't use it)
+            filename: Path to the file being checked
+            project_root_dir: Path to the project root directory. This will be added to the Python path
+                             to ensure import-linter can resolve module names correctly.
+            config_filepath: Path to the import-linter config file. If None,
+                             import-linter will search for a config file.
+
+        Note: Other import-linter options (limit_to_contracts, cache_dir,
+              is_debug_mode, show_timings, verbose) are not yet implemented.
+        """
         self.filename = filename
-        self.tree = tree
-        self._config_file = None
+        self.project_root_dir = project_root_dir
+        self.config_filepath = config_filepath
+        if not IMPORT_LINTER_AVAILABLE:
+            logger.warning("import-linter is not available")
+            return
+        self.setup_importlinter()
+
+    def setup_importlinter(self):
+        # Configure import-linter once per process
+        if not ImportLinterPlugin._configured:
+            try:
+                importlinter_configure()
+                ImportLinterPlugin._configured = True
+            except Exception as e:
+                logger.exception("Error configuring import-linter")
+                ImportLinterPlugin._configuration_error = str(e)
 
     def run(self) -> Generator[Tuple[int, int, str, type], None, None]:
         """
@@ -37,74 +79,68 @@ class ImportLinterPlugin:
         Yields:
             Tuples of (line_number, column, message, type) for each violation
         """
-        # Skip processing if import-linter is not installed
+        # Don't proceed unless import-linter is available, configured, and we're
+        # checking a Python file
         if not IMPORT_LINTER_AVAILABLE:
             return
-
-        # Only process Python files
         if not self.filename.endswith(".py"):
             return
-
-        # Only process if we're in a project with import-linter config
-        config_file = self._find_config_file()
-        if not config_file:
+        if err := ImportLinterPlugin._configuration_error:
+            yield self._make_flake8_error(1, "IMP000", f"Error configuring import-linter: {err}")
             return
 
         try:
-            # Read the user options from the config file
-            user_options = read_user_options(config_filename=config_file)
+            original_path = list(sys.path)
+            if self.project_root_dir not in sys.path:
+                sys.path.insert(0, self.project_root_dir)
 
-            # Create a report from the user options with caching
+            # Get the module name corresponding to the file getting checked
+            module_name = self._get_module_name(self.filename)
+            if not module_name:
+                return
+
+            # Read the user options from the config file, create the report of contract checks
+            user_options = read_user_options(config_filename=self.config_filepath)
+            _register_contract_types(user_options)
             report = create_report(
                 user_options,
                 cache_dir=os.path.join(os.path.expanduser("~"), ".cache", "flake8-importlinter"),
             )
 
-            # Get the module name corresponding to this file
-            module_name = self._get_module_name(config_file)
-            if not module_name:
-                return
-
             # Extract violations for this module from the report
-            for contract_name, violations in self._extract_violations(report, module_name):
-                for line_num, message in violations:
-                    yield (
-                        line_num,
-                        0,  # Column number (always 0 for architectural violations)
-                        f"IMP001 {contract_name}: {message}",
-                        type(self),
-                    )
+            for contract_name, violation in self._extract_violations(report, module_name):
+                yield from self._flake8_errors(contract_name, violation, module_name)
 
         except Exception as e:
-            # Handle errors gracefully
-            yield (1, 0, f"IMP000 Error running import-linter: {str(e)}", type(self))  # Report on first line
+            error_str = str(e)
+            logger.exception(f"Error running import-linter: {error_str}")
+            yield self._make_flake8_error(1, "IMP000", f"Error running import-linter: {error_str}")
 
-    def _find_config_file(self) -> Optional[str]:
-        """
-        Find the nearest import-linter config file in parent directories.
+        finally:
+            # Restore the original Python path
+            sys.path = original_path
 
-        Returns:
-            Path to the config file, or None if not found
-        """
-        if self._config_file:
-            return self._config_file
+    def _flake8_errors(
+        self, contract_name: str, violation: Violation, module_name: str
+    ) -> list[tuple[int, int, str, type]]:
+        line_numbers = []
+        for note in violation.import_notes:
+            if note.module == module_name:
+                line_numbers.extend(list(note.line_numbers))
+        return [
+            self._make_flake8_error(line_num, "IMP001", f"{contract_name}: {violation.summary}")
+            for line_num in line_numbers
+        ]
 
-        current_dir = os.path.dirname(os.path.abspath(self.filename))
-        while current_dir != os.path.dirname(current_dir):  # Stop at root
-            for config_name in [".importlinter", "pyproject.toml"]:
-                config_path = os.path.join(current_dir, config_name)
-                if os.path.exists(config_path):
-                    self._config_file = config_path
-                    return config_path
-            current_dir = os.path.dirname(current_dir)
-        return None
+    def _make_flake8_error(self, line_num, code, msg) -> tuple[int, int, str, type]:
+        return (line_num, 0, f"{code} {msg}", type(self))
 
-    def _get_module_name(self, config_file: str) -> Optional[str]:
+    def _get_module_name(self, project_root: str) -> Optional[str]:
         """
         Convert the current filename to a Python module name.
 
         Args:
-            config_file: Path to the import-linter config file
+            project_root: Path to the project root directory
 
         Returns:
             The Python module name for the current file, or None if not determinable
@@ -112,11 +148,10 @@ class ImportLinterPlugin:
         if not self.filename.endswith(".py"):
             return None
 
-        # Find the root package directory based on config location
-        config_dir = os.path.dirname(config_file)
-        rel_path = os.path.relpath(self.filename, config_dir)
+        # Find the relative path from the project root to this file
+        rel_path = os.path.relpath(self.filename, project_root)
 
-        # If the file is not under the config directory, it's not part of the project
+        # If the file is not under the project root, it's not part of the project
         if rel_path.startswith(".."):
             return None
 
@@ -134,88 +169,26 @@ class ImportLinterPlugin:
 
         return ".".join(module_parts)
 
-    def _extract_violations(self, report: Report, module_name: str) -> List[Tuple[str, List[Tuple[int, str]]]]:
+    def _extract_violations(self, report: Report, module_name: str) -> list[tuple[str, Violation]]:
         """
         Extract violations for the current module from the report.
 
         Reference to import-linter structure:
         - Report object contains ContractCheck objects
-        - Each ContractCheck has a `kept` attribute (boolean)
-        - Contract violations are exposed via ContractCheck.violations
-        - Violations contain importer, imported, and line number information
+        - Each ContractCheck has a `kept` attribute (boolean) which is False if the contract was violated
+        - Contract violations are stored in ContractCheck.metadata
 
         Args:
             report: The Report object from import-linter
             module_name: The module name for the current file
 
         Returns:
-            List of (contract_name, violations) tuples, where violations is a
-            list of (line_number, message) tuples.
+            List of (contract_name, Violation) tuples
         """
         violations = []
-
         # Iterate through all contract checks in the report
-        for contract, check in report.get_contract_checks():
-            if check.kept:
-                continue
-
-            # Find violations specific to this module
-            module_violations = []
-            for violation in check.violations:
-                # Match violations from the current module
-                # The violation might have different structures depending on the contract type
-                # We need to handle different contract types differently
-
-                # For contracts with direct importer/imported attributes (like ForbiddenContract)
-                if hasattr(violation, "importer") and violation.importer == module_name:
-                    line_num = self._get_line_number_from_violation(violation)
-                    if line_num:
-                        message = f"Forbidden import of {violation.imported}"
-                        module_violations.append((line_num, message))
-
-                # For more complex violations (need to extract from string representation)
-                elif str(violation).startswith(f"{module_name} ->"):
-                    line_match = re.search(r"\(l\.(\d+)\)", str(violation))
-                    if line_match:
-                        line_num = int(line_match.group(1))
-                        imported_match = re.search(r"-> ([\w\.]+)", str(violation))
-                        imported = imported_match.group(1) if imported_match else "unknown module"
-                        message = f"Forbidden import of {imported}"
-                        module_violations.append((line_num, message))
-
-            if module_violations:
-                violations.append((contract.name, module_violations))
-
+        for contract, check in report.get_contracts_and_checks():
+            for v in contract.violations(check):
+                if any(note.module == module_name for note in v.import_notes):
+                    violations.append(v)
         return violations
-
-    def _get_line_number_from_violation(self, violation) -> Optional[int]:
-        """
-        Extract the line number from a violation object.
-
-        This handles different ways that line numbers might be stored:
-        1. As a direct attribute (violation.line_number)
-        2. In a line_numbers tuple (violation.line_numbers[0])
-        3. In the string representation using a regex
-
-        Args:
-            violation: The violation object from import-linter
-
-        Returns:
-            The line number or None if it can't be determined
-        """
-        # Try direct line_number attribute
-        if hasattr(violation, "line_number") and violation.line_number is not None:
-            return violation.line_number
-
-        # Try line_numbers tuple attribute
-        if hasattr(violation, "line_numbers") and violation.line_numbers:
-            if violation.line_numbers[0] is not None:
-                return violation.line_numbers[0]
-
-        # Try extracting from string representation
-        line_match = re.search(r"\(l\.(\d+)\)", str(violation))
-        if line_match:
-            return int(line_match.group(1))
-
-        # Default to first line if we can't find a line number
-        return 1
