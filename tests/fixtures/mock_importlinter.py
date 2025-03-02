@@ -30,6 +30,11 @@ class MockContractCheck:
         self.violations = violations or []
         self.warnings = warnings or []
 
+    @property
+    def metadata(self) -> dict:
+        """Return a dictionary with violations, matching the structure expected by the plugin."""
+        return {"violations": self.violations}
+
 
 class MockContract:
     """Mock contract object that mimics import-linter's Contract."""

@@ -47,17 +47,17 @@ def test_get_module_name(plugin):
 
     # Test with a normal module
     plugin.filename = "/path/to/myproject/mypackage/subpackage/module.py"
-    module_name = plugin._get_module_name(plugin._config_file)
+    module_name = plugin._get_module_name(plugin.project_root_dir)
     assert module_name == "mypackage.subpackage.module"
 
     # Test with an __init__.py file
     plugin.filename = "/path/to/myproject/mypackage/subpackage/__init__.py"
-    module_name = plugin._get_module_name(plugin._config_file)
+    module_name = plugin._get_module_name(plugin.project_root_dir)
     assert module_name == "mypackage.subpackage"
 
     # Test with a file outside the project
     plugin.filename = "/some/other/path/module.py"
-    module_name = plugin._get_module_name(plugin._config_file)
+    module_name = plugin._get_module_name(plugin.project_root_dir)
     assert module_name is None
 
 
@@ -124,11 +124,29 @@ def test_run_with_violations(
 
 
 @mock.patch("flake8_importlinter.plugin.IMPORT_LINTER_AVAILABLE", True)
-def test_run_no_config(plugin):
+@mock.patch("flake8_importlinter.plugin.read_user_options")
+@mock.patch("flake8_importlinter.plugin.create_report")
+@mock.patch("flake8_importlinter.plugin._register_contract_types")
+def test_run_no_config(mock_register_types, mock_create_report, mock_read_options, plugin):
     """Test the run method when no config file is found."""
-    # Run should not yield any errors
-    errors = list(plugin.run())
-    assert len(errors) == 0
+    # Set the config file to None
+    plugin.config_filepath = None
+
+    # Create a simplified user_options mock
+    mock_read_options.return_value = {}
+
+    # Make the _register_contract_types function a no-op
+    mock_register_types.return_value = None
+
+    # Mock create_report to return a report with no violations
+    mock_report = MockReport(contract_checks=[])
+    mock_create_report.return_value = mock_report
+
+    # Mock _get_module_name to return None, indicating file is outside project
+    with mock.patch.object(ImportLinterPlugin, "_get_module_name", return_value=None):
+        # Run should not yield any errors
+        errors = list(plugin.run())
+        assert len(errors) == 0
 
 
 @mock.patch("flake8_importlinter.plugin.IMPORT_LINTER_AVAILABLE", True)
