@@ -2,8 +2,6 @@
 Tests for the ImportLinterPlugin.
 """
 
-import os
-import sys
 from unittest import mock
 
 import pytest
@@ -15,7 +13,12 @@ from tests.fixtures.mock_importlinter import MockViolation, MockContractCheck, M
 @pytest.fixture
 def plugin():
     """Create a plugin instance for testing."""
-    return ImportLinterPlugin(tree=None, filename="/path/to/myproject/mypackage/module.py")
+    return ImportLinterPlugin(
+        tree=None,
+        filename="/path/to/myproject/mypackage/module.py",
+        project_root_dir="/path/to/myproject",
+        config_filepath="/path/to/myproject/.importlinter",
+    )
 
 
 @pytest.fixture
@@ -35,35 +38,6 @@ def mock_read_options():
 def test_plugin_initialization(plugin):
     """Test that the plugin initializes correctly."""
     assert plugin.filename == "/path/to/myproject/mypackage/module.py"
-    assert plugin.tree is None
-    assert plugin._config_file is None
-
-
-@mock.patch("os.path.exists")
-def test_find_config_file(mock_exists, plugin):
-    """Test that the plugin can find config files."""
-    # Simulate finding a .importlinter file
-    mock_exists.side_effect = lambda path: path.endswith(".importlinter")
-
-    config_file = plugin._find_config_file()
-
-    assert config_file is not None
-    assert config_file.endswith(".importlinter")
-
-    # Check that it's cached
-    assert plugin._config_file == config_file
-
-
-@mock.patch("os.path.exists")
-def test_find_config_file_not_found(mock_exists, plugin):
-    """Test that the plugin returns None when no config file is found."""
-    # Simulate not finding any config files
-    mock_exists.return_value = False
-
-    config_file = plugin._find_config_file()
-
-    assert config_file is None
-    assert plugin._config_file is None
 
 
 def test_get_module_name(plugin):
@@ -127,15 +101,13 @@ def test_extract_violations(plugin):
 
 
 @mock.patch("flake8_importlinter.plugin.IMPORT_LINTER_AVAILABLE", True)
-@mock.patch.object(ImportLinterPlugin, "_find_config_file")
 @mock.patch.object(ImportLinterPlugin, "_get_module_name")
 @mock.patch.object(ImportLinterPlugin, "_extract_violations")
 def test_run_with_violations(
-    mock_extract, mock_get_module, mock_find_config, mock_read_options, mock_create_report, plugin
+    mock_extract, mock_get_module, mock_read_options, mock_create_report, plugin
 ):
     """Test the run method with violations."""
     # Set up mocks
-    mock_find_config.return_value = "/path/to/myproject/.importlinter"
     mock_get_module.return_value = "mypackage.module"
     mock_extract.return_value = [("Forbidden Contract", [(10, "Forbidden import of forbidden.module")])]
 
@@ -152,23 +124,17 @@ def test_run_with_violations(
 
 
 @mock.patch("flake8_importlinter.plugin.IMPORT_LINTER_AVAILABLE", True)
-@mock.patch.object(ImportLinterPlugin, "_find_config_file")
-def test_run_no_config(mock_find_config, plugin):
+def test_run_no_config(plugin):
     """Test the run method when no config file is found."""
-    # Set up mock to return no config file
-    mock_find_config.return_value = None
-
     # Run should not yield any errors
     errors = list(plugin.run())
     assert len(errors) == 0
 
 
 @mock.patch("flake8_importlinter.plugin.IMPORT_LINTER_AVAILABLE", True)
-@mock.patch.object(ImportLinterPlugin, "_find_config_file")
-def test_run_with_exception(mock_find_config, mock_read_options, plugin):
+def test_run_with_exception(mock_read_options, plugin):
     """Test the run method when an exception occurs."""
     # Set up mocks
-    mock_find_config.return_value = "/path/to/myproject/.importlinter"
     mock_read_options.side_effect = Exception("Test exception")
 
     # Run should yield an error

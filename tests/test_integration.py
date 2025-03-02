@@ -60,5 +60,48 @@ class TestIntegration:
 
     def test_layers_contract(self):
         """Test the plugin with a layers contract."""
-        # TODO: Implement test for layers contract
-        pass
+        # Create a plugin instance with a file that violates the layers contract
+        # We need to use a different config file for this test
+        original_path = list(sys.path)
+
+        # Define file paths
+        import_linter_path = os.path.join(self.integration_dir, ".importlinter")
+        layers_import_linter_path = os.path.join(self.integration_dir, ".importlinter.layers")
+        backup_path = os.path.join(self.integration_dir, ".importlinter.backup")
+
+        try:
+            # If the actual file exists, rename it temporarily
+            if os.path.exists(import_linter_path):
+                os.rename(import_linter_path, backup_path)
+
+            # Copy the layers version to the expected location
+            with open(layers_import_linter_path, "r") as f_src:
+                with open(import_linter_path, "w") as f_dst:
+                    f_dst.write(f_src.read())
+
+            # Create a plugin instance with a file that violates the layers contract
+            module_path = os.path.join(self.integration_dir, "mypackage", "low", "module_c.py")
+            plugin = ImportLinterPlugin(tree=None, filename=module_path)
+
+            # Run the plugin and collect any errors
+            errors = list(plugin.run())
+
+            # Check that we got at least one error with the expected format
+            msg = f"Expected at least 1 error, got {len(errors)}: {errors}"
+            assert len(errors) >= 1, msg
+
+            # Check the first error
+            line, col, message, instance = errors[0]
+            assert col == 0
+            assert "IMP001" in message
+            assert "Layer" in message
+
+        finally:
+            # Clean up - restore original .importlinter file
+            if os.path.exists(import_linter_path):
+                os.remove(import_linter_path)
+            if os.path.exists(backup_path):
+                os.rename(backup_path, import_linter_path)
+
+            # Restore the original sys.path
+            sys.path = original_path

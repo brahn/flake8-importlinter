@@ -1,3 +1,4 @@
+# TODO: Look over this file and make sure it's correct
 [build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -28,6 +29,7 @@ classifiers = [
 dependencies = [
     "flake8>=3.8.0",
     "import-linter>=1.0.0",
+    "tomli>=2.0.0;python_version<'3.11'",
 ]
 
 [project.optional-dependencies]
