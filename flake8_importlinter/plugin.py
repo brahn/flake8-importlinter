@@ -5,6 +5,7 @@ from typing import Generator, Tuple, Optional, List
 import logging
 
 from importlinter.application.use_cases import _register_contract_types
+from importlinter.domain.contract import ContractCheck
 
 
 # Initialize importlinter configuration
@@ -173,10 +174,8 @@ class ImportLinterPlugin:
 
         Reference to import-linter structure:
         - Report object contains ContractCheck objects
-        - Each ContractCheck has a `kept` attribute (boolean)
-        - Contract violations are stored in ContractCheck.metadata for actual import-linter
-          (though our test mocks have them directly as .violations)
-        - Violations contain importer, imported, and line number information
+        - Each ContractCheck has a `kept` attribute (boolean) which is False if the contract was violated
+        - Contract violations are stored in ContractCheck.metadata
 
         Args:
             report: The Report object from import-linter
@@ -187,21 +186,25 @@ class ImportLinterPlugin:
             list of (line_number, message) tuples.
         """
         violations = []
-
         # Iterate through all contract checks in the report
         for contract, check in report.get_contracts_and_checks():
-            if check.kept:
-                continue
-            # Find violations specific to this module
-            contract_violations = []
-            violations_for_check = (check.metadata or {}).get("violations", [])
-            for violation in violations_for_check:
-                violation_results = self._process_violation(violation, module_name)
-                contract_violations.extend(violation_results)
+            contract_violations = self._process_check(check, module_name)
             if contract_violations:
                 violations.append((contract.name, contract_violations))
-
         return violations
+
+    def _process_check(self, check: ContractCheck, module_name: str) -> List[Tuple[int, str]]:
+        """
+        Process a contract check.  Return a list of (line_number, message) tuples for violations
+        involving this module.
+        """
+        if check.kept:
+            return []
+        violations = (check.metadata or {}).get("violations", [])
+        results = []
+        for violation in violations:
+            results.extend(self._process_violation(violation, module_name))
+        return results
 
     def _process_violation(self, violation, module_name: str) -> List[Tuple[int, str]]:
         """
