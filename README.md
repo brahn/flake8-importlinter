@@ -2,6 +2,9 @@
 
 A [Flake8](https://flake8.pycqa.org/) plugin that integrates [import-linter](https://github.com/seddonym/import-linter) to check for broken import restrictions.  With flake8's IDE integrations, you can see violations directly in your editor.
 
+Note that this relies on the import-linter fork at https://github.com/brahn/import-linter.
+
+For a demo, see https://github.com/brahn/flake8-importlinter-demo.
 ## Installation
 
 ```bash
